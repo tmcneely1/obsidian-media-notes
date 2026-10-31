@@ -2,6 +2,12 @@
 
 <a href="https://obsidian.md/plugins?id=media-notes"><img src="https://img.shields.io/badge/media_notes-v1.3-6c31e3?logo=obsidian&style=for-the-badge"></a><br>
 
+> **About this fork.** The upstream plugin stopped loading on Obsidian
+> 1.7.2+ ("Failed to load plugin"). This fork fixes that, adds reading-view
+> support, and targets current Obsidian. Install it with
+> [BRAT](https://github.com/TfTHacker/obsidian42-brat) using
+> `tmcneely1/obsidian-media-notes`.
+
 A best-in-class video note-taking experience in Obsidian.
 
 Seamlessly capture and replay insights from YouTube videos, podcasts, and lectures into your knowledge base.
