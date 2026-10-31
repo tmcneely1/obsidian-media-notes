@@ -42,9 +42,40 @@ If your plugin does not need CSS, delete this file.
 	flex-direction: row !important;
 }
 
+/* Reading view mirrors the source-view layout, so the player shows in reading
+   mode as well as editing mode. The preview pane has to be told to share the
+   row, since it is normally the only child. */
+.media-container-parent-vertical .markdown-reading-view {
+	display: flex !important;
+	flex-direction: row !important;
+}
+
+.media-container-parent-vertical
+	.markdown-reading-view
+	> .markdown-preview-view {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* Horizontal split (player stacked on top) in reading view. */
+.markdown-reading-view {
+	display: flex;
+	flex-direction: column;
+}
+
+.markdown-reading-view > .media-notes-container {
+	width: 100%;
+	flex: none;
+}
+
+.markdown-reading-view > .markdown-preview-view {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
 .media-container-parent-vertical .media-notes-container {
 	height: 100%;
-	/* width: 50%; */
+	flex: none;
 }
 
 .media-container-parent-vertical .media-container {

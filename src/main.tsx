@@ -175,6 +175,18 @@ export default class MediaNotesPlugin extends Plugin {
 		}
 	};
 
+	// A MarkdownView holds both sub-views at once and hides the inactive one, so
+	// the player has to be mounted into whichever is currently showing -- mounting
+	// into the hidden one is why the player "did not appear" in reading mode.
+	getPlayerMountPoint = (markdownView: MarkdownView): Element | null => {
+		const container = markdownView.containerEl;
+		const isReading = markdownView.getMode() === "preview";
+		const selector = isReading
+			? ".markdown-reading-view"
+			: ".markdown-source-view";
+		return container.querySelector(selector);
+	};
+
 	renderPlayerInView = (markdownView: MarkdownView) => {
 		const frontmatter = this.getViewFrontmatter(markdownView);
 		const frontmatterMediaLink = getMediaLinkFromFrontmatter(frontmatter);
@@ -185,13 +197,23 @@ export default class MediaNotesPlugin extends Plugin {
 				"." + mediaNotesContainerClass
 			);
 
+			const mountPoint = this.getPlayerMountPoint(markdownView);
+			if (!mountPoint) return;
+
 			if (existingPlayerComponent) {
 				const playerId =
 					existingPlayerComponent.getAttribute("data-player-id") ??
 					"";
 				const player = this.players[playerId];
-				// If a player state object exists for this media link, don't re-render
-				if (player && player.mediaLink === frontmatterMediaLink) {
+				// If a player state object exists for this media link, don't
+				// re-render -- unless the user switched between editing and
+				// reading, which leaves the player stranded in the hidden
+				// sub-view and needs it remounted into the visible one.
+				if (
+					player &&
+					player.mediaLink === frontmatterMediaLink &&
+					mountPoint.contains(existingPlayerComponent)
+				) {
 					return;
 				}
 				// remove the existing player
@@ -209,9 +231,6 @@ export default class MediaNotesPlugin extends Plugin {
 			// name is important - matches data-player-id in getActiveViewYoutubePlayer
 			div.dataset.playerId = uniqueId;
 			div.style.background = this.settings.backgroundColor;
-			const markdownSourceview = container.querySelector(
-				".markdown-source-view"
-			);
 			if (this.settings.defaultSplitMode === "Vertical") {
 				div.style.width = this.settings.horizontalPlayerWidth + "%";
 				container.classList.add(mediaParentContainerVerticalClass);
@@ -220,8 +239,7 @@ export default class MediaNotesPlugin extends Plugin {
 				div.style.height = this.settings.verticalPlayerHeight + "%";
 			}
 
-			if (!markdownSourceview) return;
-			markdownSourceview.prepend(div);
+			mountPoint.prepend(div);
 
 			const mediaLink = frontmatterMediaLink;
 			const ytRef = React.createRef<YouTube>();
