@@ -271,8 +271,8 @@ export const MediaFrame: React.FC<{
 						>
 							<svg
 								viewBox="0 0 24 24"
-								width="16"
-								height="16"
+								width="23"
+								height="23"
 								fill="none"
 								stroke="currentColor"
 								strokeWidth="2"

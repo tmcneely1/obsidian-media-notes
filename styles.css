@@ -473,57 +473,78 @@ body.media-notes-resizing .media-notes-resize-handle {
 
 /* --- Insert-timestamp button ----------------------------------------- */
 
+/* Styled to read as one more control in YouTube's own top-right row: a bare
+   white glyph with no chrome of its own, on the same baseline and the same
+   48px rhythm as the mute / captions / settings buttons beside it.
+
+   --media-notes-button-right places the centre of the button one slot to the
+   left of the mute button. YouTube's controls are a fixed pixel size whatever
+   the player width, so this is a fixed offset; it is capped at half the player
+   so a narrow pane cannot push the button onto the video title. */
 .media-notes-timestamp-button {
 	position: absolute;
-	top: 8px;
-	/* Sits to the left of YouTube's own top-right controls (mute, captions,
-	   settings) so it does not cover them. Those are a fixed pixel size
-	   regardless of player width, so this offset is fixed too -- capped at half
-	   the player so it cannot be pushed onto the title in a narrow pane. */
-	right: min(var(--media-notes-button-right, 200px), 50%);
+	top: 4px;
+	right: min(var(--media-notes-button-right, 180px), 50%);
 	z-index: 2;
 
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	/* 36px keeps a comfortable hit area without the glyph drifting off the row */
+	height: 36px;
+	width: 36px;
 	padding: 0;
-	height: 28px;
-	width: 28px;
+	margin: 0;
 
 	line-height: 1;
 	font-family: inherit;
-	color: var(--text-on-accent, #fff);
+	color: #fff;
 	cursor: pointer;
 
-	background-color: rgba(0, 0, 0, 0.55);
-	border: 1px solid rgba(255, 255, 255, 0.25);
-	border-radius: var(--radius-s, 4px);
-	box-shadow: none;
+	/* Obsidian and themes both style bare <button> elements, and some do it with
+	   enough specificity to win on their own, so these are forced. Without this
+	   the glyph sits on a grey rounded box that the YouTube controls next to it
+	   do not have. */
+	background: none !important;
+	background-color: transparent !important;
+	border: none !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
 
-	/* Resting state is faint so it does not compete with the video; it comes
-	   forward when the pointer is anywhere over the player. */
-	opacity: 0.35;
-	transition: opacity 120ms ease-in-out, background-color 120ms ease-in-out;
+	/* Faint at rest so it stays discoverable without competing with the video,
+	   then full strength once the pointer is over the player -- which is also
+	   when YouTube raises its own chrome, so the row lights up together. */
+	opacity: 0.45;
+	transition: opacity 100ms ease-in-out;
+	/* YouTube's glyphs sit on a gradient scrim; this keeps ours legible over a
+	   bright frame without painting a box. */
+	filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
 }
 
 .media-container:hover .media-notes-timestamp-button {
-	opacity: 0.9;
-}
-
-.media-notes-timestamp-button:hover {
 	opacity: 1;
-	background-color: var(--interactive-accent);
-	border-color: var(--interactive-accent);
 }
 
+.media-notes-timestamp-button:hover,
+.media-notes-timestamp-button:focus-visible,
 .media-notes-timestamp-button:active {
-	transform: translateY(1px);
+	background: none !important;
+	background-color: transparent !important;
+	box-shadow: none !important;
+}
+
+.media-notes-timestamp-button:hover,
+.media-notes-timestamp-button:focus-visible {
+	opacity: 1;
 }
 
 .media-notes-timestamp-button:focus-visible {
-	opacity: 1;
-	outline: 2px solid var(--interactive-accent);
-	outline-offset: 2px;
+	outline: 1px solid rgba(255, 255, 255, 0.8);
+	outline-offset: -4px;
+}
+
+.media-notes-timestamp-button:active {
+	opacity: 0.75;
 }
 
 .media-notes-timestamp-button svg {
