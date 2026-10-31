@@ -470,3 +470,71 @@ body.media-notes-resizing .media-notes-resize-handle {
 	user-select: none;
 	-webkit-user-select: none;
 }
+
+/* --- Insert-timestamp button ----------------------------------------- */
+
+.media-notes-timestamp-button {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	z-index: 2;
+
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 9px;
+	height: auto;
+	width: auto;
+
+	font-size: 12px;
+	line-height: 1;
+	font-family: inherit;
+	color: var(--text-on-accent, #fff);
+	cursor: pointer;
+
+	background-color: rgba(0, 0, 0, 0.55);
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	border-radius: var(--radius-s, 4px);
+	box-shadow: none;
+
+	/* Resting state is faint so it does not compete with the video; it comes
+	   forward when the pointer is anywhere over the player. */
+	opacity: 0.35;
+	transition: opacity 120ms ease-in-out, background-color 120ms ease-in-out;
+}
+
+.media-container:hover .media-notes-timestamp-button {
+	opacity: 0.9;
+}
+
+.media-notes-timestamp-button:hover {
+	opacity: 1;
+	background-color: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+}
+
+.media-notes-timestamp-button:active {
+	transform: translateY(1px);
+}
+
+.media-notes-timestamp-button:focus-visible {
+	opacity: 1;
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+.media-notes-timestamp-button svg {
+	flex: none;
+}
+
+/* The label is the first thing to go when the player is narrow. */
+@media (max-width: 420px) {
+	.media-notes-timestamp-button span {
+		display: none;
+	}
+}
+
+/* Never let a drag over the divider interact with the button. */
+body.media-notes-resizing .media-notes-timestamp-button {
+	pointer-events: none;
+}

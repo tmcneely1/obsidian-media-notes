@@ -1,6 +1,6 @@
 {
 	"name": "media-notes-plugin",
-	"version": "1.5.0",
+	"version": "1.6.0",
 	"description": "Obsidian plugin for taking notes on YouTube videos and podcasts with media controls and timestamps.",
 	"main": "main.js",
 	"scripts": {

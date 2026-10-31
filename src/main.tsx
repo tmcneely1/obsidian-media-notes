@@ -5,6 +5,7 @@ import {
 	App,
 	Editor,
 	MarkdownView,
+	Notice,
 	Plugin,
 	PluginSettingTab,
 	Setting,
@@ -29,6 +30,7 @@ export interface MediaNotesPluginSettings {
 	displayProgressBar: boolean;
 	displayTimestamp: boolean;
 	pauseOnTimestampInsert: boolean;
+	showTimestampButton: boolean;
 	defaultSplitMode: "Horizontal" | "Vertical";
 	mediaData: {
 		[id: string]: {
@@ -45,6 +47,7 @@ const DEFAULT_SETTINGS: MediaNotesPluginSettings = {
 	horizontalPlayerWidth: 40,
 	defaultSplitMode: "Vertical",
 	pauseOnTimestampInsert: false,
+	showTimestampButton: true,
 	displayProgressBar: true,
 	displayTimestamp: true,
 	timestampOffsetSeconds: 6,
@@ -105,6 +108,68 @@ export default class MediaNotesPlugin extends Plugin {
 			mediaLink: string;
 			eventEmitter: EventEmitter;
 		};
+	};
+
+	// Shared by the "Insert Timestamp" command and the button on the player, so
+	// both honour the same template, offset and pause-on-insert setting.
+	insertTimestamp = async (editor: Editor, view: MarkdownView) => {
+		const player = this.getActiveViewYoutubePlayer(view);
+		if (!player || !player.ytRef) return;
+		const timestamp =
+			await player.ytRef.current?.internalPlayer?.getCurrentTime();
+		if (timestamp === undefined || timestamp === null) return;
+		const offsetTimestamp =
+			timestamp - this.settings.timestampOffsetSeconds >= 0
+				? timestamp - this.settings.timestampOffsetSeconds
+				: 0;
+		const formattedTimestamp = formatTimestamp(offsetTimestamp);
+		const timestampTemplate = this.settings.timestampTemplate;
+		let timestampSnippet = timestampTemplate.replace(
+			"{ts}",
+			formattedTimestamp
+		);
+		const videoUrl =
+			await player.ytRef.current?.internalPlayer?.getVideoUrl();
+
+		if (videoUrl) {
+			// for some reason, the t= param is wrong in the videoUrl from getVideoUrl. fix it
+			const fixedVideoUrl = new URL(videoUrl);
+			fixedVideoUrl.searchParams.set(
+				"t",
+				Math.floor(offsetTimestamp).toString()
+			);
+			timestampSnippet = timestampSnippet.replace(
+				"{link}",
+				`${fixedVideoUrl}`
+			);
+		}
+		timestampSnippet = timestampSnippet.replace(/\\n/g, "\n");
+		editor.replaceSelection(timestampSnippet);
+
+		if (this.settings.pauseOnTimestampInsert) {
+			const playerState =
+				await player.ytRef.current?.internalPlayer?.getPlayerState();
+			if (playerState === YouTube.PlayerState.PLAYING) {
+				player.ytRef.current?.getInternalPlayer()?.pauseVideo();
+				player.eventEmitter.emit("handleAction", {
+					type: "pause",
+				});
+			}
+		}
+	};
+
+	// Entry point for the button on the player, which has a view but no editor
+	// handed to it. Inserting needs an editor, which only exists in editing mode.
+	insertTimestampFromButton = async (view: MarkdownView) => {
+		if (view.getMode() === "preview") {
+			new Notice(
+				"Media Notes: switch to editing view to insert a timestamp"
+			);
+			return;
+		}
+		const editor = view.editor;
+		if (!editor) return;
+		await this.insertTimestamp(editor, view);
 	};
 
 	getActiveViewYoutubePlayer = (view: View) => {
@@ -423,6 +488,11 @@ export default class MediaNotesPlugin extends Plugin {
 							ytRef={ytRef}
 							initSeconds={Math.round(initSeconds)}
 							autoplay={autoplay}
+							onInsertTimestamp={() => {
+								void this.insertTimestampFromButton(
+									markdownView
+								);
+							}}
 						/>
 					</AppProvider>
 				</>
@@ -477,51 +547,7 @@ export default class MediaNotesPlugin extends Plugin {
 			id: "insert-media-timestamp",
 			name: "Insert Timestamp",
 			editorCallback: async (editor: Editor, view: MarkdownView) => {
-				const player = this.getActiveViewYoutubePlayer(view);
-				if (!player || !player.ytRef) return;
-				const timestamp =
-					await player.ytRef.current?.internalPlayer?.getCurrentTime();
-				if (!timestamp) return;
-				const offsetTimestamp =
-					timestamp - this.settings.timestampOffsetSeconds >= 0
-						? timestamp - this.settings.timestampOffsetSeconds
-						: 0;
-				const formattedTimestamp = formatTimestamp(offsetTimestamp);
-				const timestampTemplate = this.settings.timestampTemplate;
-				let timestampSnippet = timestampTemplate.replace(
-					"{ts}",
-					formattedTimestamp
-				);
-				const videoUrl =
-					await player.ytRef.current?.internalPlayer?.getVideoUrl();
-
-				if (videoUrl) {
-					// for some reason, the t= param is wrong in the videoUrl from getVidelUrl. fix it
-					const fixedVideoUrl = new URL(videoUrl);
-					fixedVideoUrl.searchParams.set(
-						"t",
-						Math.floor(offsetTimestamp).toString()
-					);
-					timestampSnippet = timestampSnippet.replace(
-						"{link}",
-						`${fixedVideoUrl}`
-					);
-				}
-				timestampSnippet = timestampSnippet.replace(/\\n/g, "\n");
-				editor.replaceSelection(timestampSnippet);
-				if (this.settings.pauseOnTimestampInsert) {
-					const player = this.getActiveViewYoutubePlayer(view);
-					if (!player || !player.ytRef) return;
-					const playerState =
-						await player.ytRef.current?.internalPlayer?.getPlayerState();
-					if (playerState === YouTube.PlayerState.PLAYING) {
-						player.ytRef.current?.getInternalPlayer()?.pauseVideo();
-						player.eventEmitter.emit("handleAction", {
-							type: "pause",
-						});
-						return;
-					}
-				}
+				await this.insertTimestamp(editor, view);
 			},
 		});
 
@@ -933,6 +959,20 @@ class SettingsTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.displayTimestamp)
 					.onChange(async (value) => {
 						this.plugin.settings.displayTimestamp = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Show insert-timestamp button on the player")
+			.setDesc(
+				"Display a small button over the player that inserts a timestamp into the note."
+			)
+			.addToggle((val) =>
+				val
+					.setValue(this.plugin.settings.showTimestampButton)
+					.onChange(async (value) => {
+						this.plugin.settings.showTimestampButton = value;
 						await this.plugin.saveSettings();
 					})
 			);

@@ -14,7 +14,8 @@ export const MediaFrame: React.FC<{
 	ytRef: React.RefObject<YouTube>;
 	initSeconds: number;
 	autoplay?: boolean;
-}> = ({ mediaLink, ytRef, initSeconds, autoplay }) => {
+	onInsertTimestamp?: () => void;
+}> = ({ mediaLink, ytRef, initSeconds, autoplay, onInsertTimestamp }) => {
 	const videoId = getVideoId(mediaLink);
 	if (!videoId) return null;
 	const opts: YouTubeProps["opts"] = {
@@ -251,6 +252,38 @@ export const MediaFrame: React.FC<{
 						}}
 					></div>
 				</div>
+				{onInsertTimestamp &&
+					context?.settings?.showTimestampButton !== false && (
+						<button
+							type="button"
+							className="media-notes-timestamp-button"
+							aria-label="Insert timestamp"
+							// The button sits over a cross-origin iframe, which
+							// would otherwise take the click.
+							onPointerDown={(e) => e.stopPropagation()}
+							onClick={(e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								onInsertTimestamp();
+							}}
+						>
+							<svg
+								viewBox="0 0 24 24"
+								width="15"
+								height="15"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								aria-hidden="true"
+							>
+								<circle cx="12" cy="12" r="9"></circle>
+								<polyline points="12 7 12 12 15.5 14"></polyline>
+							</svg>
+							<span>Timestamp</span>
+						</button>
+					)}
 			</div>
 		</div>
 	);

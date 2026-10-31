@@ -4,7 +4,8 @@
 
 > **About this fork.** The upstream plugin stopped loading on Obsidian
 > 1.7.2+ ("Failed to load plugin"). This fork fixes that, adds reading-view
-> support and drag-to-resize, and targets current Obsidian. Install it with
+> support, drag-to-resize and an insert-timestamp button on the player, and
+> targets current Obsidian. Install it with
 > [BRAT](https://github.com/TfTHacker/obsidian42-brat) using
 > `tmcneely1/obsidian-media-notes`.
 
@@ -14,7 +15,8 @@ Seamlessly capture and replay insights from YouTube videos, podcasts, and lectur
 
 -   **One-Click Save** - Instantly save from YouTube to Obsidian media note
 -   **Media Hotkeys**:- Pause and skip forward/back while staying in your note
--   **Timestamps** - Insert clickable timestamp links to jump back to key moments
+-   **Timestamps** - Insert clickable timestamp links to jump back to key moments,
+    from the hotkey, the command palette, or the button on the player
 -   **Resume Playback** - Resume videos from where you left off
 
 <div style="margin: 0 auto;">
