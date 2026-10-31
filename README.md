@@ -4,7 +4,7 @@
 
 > **About this fork.** The upstream plugin stopped loading on Obsidian
 > 1.7.2+ ("Failed to load plugin"). This fork fixes that, adds reading-view
-> support, and targets current Obsidian. Install it with
+> support and drag-to-resize, and targets current Obsidian. Install it with
 > [BRAT](https://github.com/TfTHacker/obsidian42-brat) using
 > `tmcneely1/obsidian-media-notes`.
 
@@ -86,7 +86,7 @@ Search "Media Notes" in the Obsidian Community Plugins library to find this plug
 -   [x] Pause when inserting timestamp
 -   [ ] Support jumping to timestamp links using keyboard shortcuts (e.g alt+enter)
 -   [ ] Support for jumping to timestamp link via https://github.com/mrjackphil/obsidian-jump-to-link
--   [ ] Drag to resize media player frame
+-   [x] Drag to resize media player frame
 -   [ ] Hotkey to toggle focus onto video and use YouTube hotkeys
 -   [ ] Support for other media content providers
 

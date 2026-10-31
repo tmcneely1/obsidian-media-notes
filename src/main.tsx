@@ -15,6 +15,7 @@ import * as React from "react";
 import YouTube from "react-youtube";
 import { createClickHandlerPlugin } from "./viewPlugin";
 import { getMediaLinkFromFrontmatter } from "./media-link";
+import { computePlayerPercent } from "./resize";
 import { EventEmitter } from "events";
 
 export interface MediaNotesPluginSettings {
@@ -55,6 +56,8 @@ const DEFAULT_SETTINGS: MediaNotesPluginSettings = {
 
 const mediaNotesContainerClass = "media-notes-container";
 const mediaParentContainerVerticalClass = "media-container-parent-vertical";
+const mediaResizeHandleClass = "media-notes-resize-handle";
+const mediaResizingClass = "media-notes-resizing";
 
 export const formatTimestamp = (timestamp: number | undefined) => {
 	if (timestamp === undefined) return "";
@@ -86,6 +89,15 @@ const convertTimestampToSeconds = (timestamp: string) => {
 
 export default class MediaNotesPlugin extends Plugin {
 	settings: MediaNotesPluginSettings;
+
+	// Set while a resize drag is in flight so the document-level listeners can be
+	// torn down if the plugin unloads mid-drag.
+	activeDragCleanup: (() => void) | null = null;
+
+	stopActiveDrag = () => {
+		this.activeDragCleanup?.();
+		this.activeDragCleanup = null;
+	};
 
 	players: {
 		[id: string]: {
@@ -187,6 +199,132 @@ export default class MediaNotesPlugin extends Plugin {
 		return container.querySelector(selector);
 	};
 
+	// Handles are siblings of the player, so removing the player alone would leave
+	// them behind -- and they would pile up on every re-render (toggling between
+	// editing and reading re-renders).
+	removeResizeHandles = (root: Element) => {
+		root.querySelectorAll("." + mediaResizeHandleClass).forEach((el) =>
+			el.remove()
+		);
+	};
+
+	// Drag-to-resize. The handle is a sibling of the player inside the same flex
+	// container, so the layout stays [player][handle][note] in vertical split and
+	// stacks in horizontal split.
+	//
+	// Two things make this fiddly. The YouTube player is a cross-origin iframe,
+	// which swallows pointer events the moment the cursor crosses into it mid-drag
+	// -- so the drag is held with setPointerCapture AND the iframe is made
+	// pointer-events:none for the duration. And the size is stored as a percentage
+	// so it survives window resizes, which means measuring against the container
+	// rather than accumulating pixel deltas.
+	attachResizeHandle = (
+		playerDiv: HTMLElement,
+		mountPoint: Element,
+		isVerticalSplit: boolean
+	) => {
+		const handle = document.createElement("div");
+		handle.className = mediaResizeHandleClass;
+		handle.classList.add(
+			isVerticalSplit
+				? mediaResizeHandleClass + "-vertical"
+				: mediaResizeHandleClass + "-horizontal"
+		);
+		handle.setAttribute("aria-label", "Drag to resize the media player");
+		playerDiv.after(handle);
+
+		let dragging = false;
+
+		const percentFromEvent = (e: PointerEvent): number | null => {
+			const bounds = mountPoint.getBoundingClientRect();
+			return computePlayerPercent(
+				isVerticalSplit
+					? e.clientX - bounds.left
+					: e.clientY - bounds.top,
+				isVerticalSplit ? bounds.width : bounds.height
+			);
+		};
+
+		const applyPercent = (pct: number) => {
+			if (isVerticalSplit) {
+				playerDiv.style.width = pct + "%";
+			} else {
+				playerDiv.style.height = pct + "%";
+			}
+		};
+
+		const onPointerMove = (e: PointerEvent) => {
+			if (!dragging) return;
+			const pct = percentFromEvent(e);
+			if (pct === null) return;
+			applyPercent(pct);
+			e.preventDefault();
+		};
+
+		const endDrag = (e: PointerEvent) => {
+			if (!dragging) return;
+			dragging = false;
+			this.stopActiveDrag();
+
+			const pct = percentFromEvent(e);
+			if (pct === null) return;
+			applyPercent(pct);
+			// Persist, so the size carries over to every other media note.
+			if (isVerticalSplit) {
+				this.settings.horizontalPlayerWidth = Math.round(pct);
+			} else {
+				this.settings.verticalPlayerHeight = Math.round(pct);
+			}
+			this.saveSettings();
+		};
+
+		const onPointerDown = (e: PointerEvent) => {
+			// left button only; ignore context-menu / middle-click
+			if (e.button !== 0) return;
+			dragging = true;
+
+			const doc = handle.ownerDocument;
+			doc.body.classList.add(mediaResizingClass);
+
+			// The listeners go on the document, not the handle. The handle is only
+			// a few pixels wide, so the pointer leaves it on the very first move;
+			// binding to the handle (even with setPointerCapture, which is only
+			// best-effort here) means the drag is dropped immediately.
+			doc.addEventListener("pointermove", onPointerMove);
+			doc.addEventListener("pointerup", endDrag);
+			doc.addEventListener("pointercancel", endDrag);
+
+			this.activeDragCleanup = () => {
+				doc.removeEventListener("pointermove", onPointerMove);
+				doc.removeEventListener("pointerup", endDrag);
+				doc.removeEventListener("pointercancel", endDrag);
+				doc.body.classList.remove(mediaResizingClass);
+			};
+
+			// Deliberately no preventDefault() here. Cancelling the default action
+			// of pointerdown also suppresses the compatibility mouse events, which
+			// would stop dblclick from ever firing and break the reset below.
+			// Text selection during the drag is handled by user-select in CSS.
+		};
+
+		// Double-click the divider to snap back to the default size.
+		const onDoubleClick = () => {
+			const reset = isVerticalSplit
+				? DEFAULT_SETTINGS.horizontalPlayerWidth
+				: DEFAULT_SETTINGS.verticalPlayerHeight;
+			applyPercent(reset);
+			if (isVerticalSplit) {
+				this.settings.horizontalPlayerWidth = reset;
+			} else {
+				this.settings.verticalPlayerHeight = reset;
+			}
+			this.saveSettings();
+		};
+
+		this.registerDomEvent(handle, "pointerdown", onPointerDown);
+		this.registerDomEvent(handle, "dblclick", onDoubleClick);
+	};
+
 	renderPlayerInView = (markdownView: MarkdownView) => {
 		const frontmatter = this.getViewFrontmatter(markdownView);
 		const frontmatterMediaLink = getMediaLinkFromFrontmatter(frontmatter);
@@ -217,6 +355,7 @@ export default class MediaNotesPlugin extends Plugin {
 					return;
 				}
 				// remove the existing player
+				this.removeResizeHandles(container);
 				existingPlayerComponent.remove();
 				this.savePlayerTimestamp(playerId);
 				delete this.players[playerId];
@@ -231,7 +370,9 @@ export default class MediaNotesPlugin extends Plugin {
 			// name is important - matches data-player-id in getActiveViewYoutubePlayer
 			div.dataset.playerId = uniqueId;
 			div.style.background = this.settings.backgroundColor;
-			if (this.settings.defaultSplitMode === "Vertical") {
+			const isVerticalSplit =
+				this.settings.defaultSplitMode === "Vertical";
+			if (isVerticalSplit) {
 				div.style.width = this.settings.horizontalPlayerWidth + "%";
 				container.classList.add(mediaParentContainerVerticalClass);
 			} else {
@@ -240,6 +381,7 @@ export default class MediaNotesPlugin extends Plugin {
 			}
 
 			mountPoint.prepend(div);
+			this.attachResizeHandle(div, mountPoint, isVerticalSplit);
 
 			const mediaLink = frontmatterMediaLink;
 			const ytRef = React.createRef<YouTube>();
@@ -288,6 +430,7 @@ export default class MediaNotesPlugin extends Plugin {
 		} else {
 			// if there's no media_link, cleanup
 			const container = markdownView.containerEl;
+			this.removeResizeHandles(container);
 			// cleanup existing players, and save timestamp
 			const div = container.querySelector("." + mediaNotesContainerClass);
 			if (div) {
@@ -592,6 +735,7 @@ export default class MediaNotesPlugin extends Plugin {
 			if (leaf.isDeferred) return;
 			const view = leaf.view;
 			if (!(view instanceof MarkdownView)) return;
+			this.removeResizeHandles(view.containerEl);
 			view.containerEl
 				.querySelectorAll("." + mediaNotesContainerClass)
 				.forEach((div) => {
@@ -611,6 +755,8 @@ export default class MediaNotesPlugin extends Plugin {
 				mediaParentContainerVerticalClass
 			);
 		});
+		this.stopActiveDrag();
+		document.body.classList.remove(mediaResizingClass);
 		this.players = {};
 	}
 

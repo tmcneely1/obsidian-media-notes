@@ -392,3 +392,81 @@ If your plugin does not need CSS, delete this file.
 	animation-iteration-count: infinite;
 	animation-timing-function: linear;
 }
+
+/* --- Drag to resize the player --------------------------------------- */
+
+.media-notes-resize-handle {
+	flex: none;
+	position: relative;
+	background-color: transparent;
+	transition: background-color 120ms ease-in-out;
+	z-index: 1;
+}
+
+/* The visible divider is deliberately thin, so widen the grab area with a
+   transparent overlay rather than making the bar itself hard to ignore. */
+.media-notes-resize-handle::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+}
+
+.media-notes-resize-handle:hover,
+.media-notes-resize-handle:active {
+	background-color: var(--interactive-accent);
+}
+
+.media-notes-resize-handle-vertical {
+	width: 3px;
+	cursor: col-resize;
+	align-self: stretch;
+}
+
+.media-notes-resize-handle-vertical::before {
+	left: -4px;
+	right: -4px;
+}
+
+.media-notes-resize-handle-horizontal {
+	height: 3px;
+	width: 100%;
+	cursor: row-resize;
+}
+
+.media-notes-resize-handle-horizontal::before {
+	top: -4px;
+	bottom: -4px;
+}
+
+/* While dragging, the cross-origin YouTube iframe would otherwise capture the
+   pointer as soon as the cursor moved over it and the drag would stall. */
+body.media-notes-resizing {
+	user-select: none;
+}
+
+body.media-notes-resizing iframe {
+	pointer-events: none;
+}
+
+body.media-notes-resizing .media-notes-resize-handle-vertical,
+body.media-notes-resizing .media-notes-resize-handle-vertical * {
+	cursor: col-resize;
+}
+
+body.media-notes-resizing .media-notes-resize-handle-horizontal,
+body.media-notes-resizing .media-notes-resize-handle-horizontal * {
+	cursor: row-resize;
+}
+
+body.media-notes-resizing .media-notes-resize-handle {
+	background-color: var(--interactive-accent);
+}
+
+/* The divider is a drag target, never a text target. */
+.media-notes-resize-handle {
+	user-select: none;
+	-webkit-user-select: none;
+}
