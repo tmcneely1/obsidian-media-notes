@@ -14,6 +14,7 @@ import {
 import * as React from "react";
 import YouTube from "react-youtube";
 import { createClickHandlerPlugin } from "./viewPlugin";
+import { getMediaLinkFromFrontmatter } from "./media-link";
 import { EventEmitter } from "events";
 
 export interface MediaNotesPluginSettings {
@@ -83,10 +84,6 @@ const convertTimestampToSeconds = (timestamp: string) => {
 	return seconds;
 };
 
-const getMediaLinkFromFrontmatter = (frontmatter: Record<string, string>) => {
-	return frontmatter["media_link"] || frontmatter["media"];
-};
-
 export default class MediaNotesPlugin extends Plugin {
 	settings: MediaNotesPluginSettings;
 
@@ -130,12 +127,59 @@ export default class MediaNotesPlugin extends Plugin {
 			});
 	};
 
+	// Renders into every currently-loaded markdown leaf, skipping deferred ones
+	// (Obsidian 1.7.2+) whose view is not a MarkdownView yet. Deferred leaves get
+	// picked up by the layout-change handler once the user actually opens them.
+	renderPlayersInAllViews = () => {
+		this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
+			if (leaf.isDeferred) return;
+			const view = leaf.view;
+			if (!(view instanceof MarkdownView)) return;
+			this.safeRenderPlayerInView(view);
+		});
+	};
+
+	// Never let a single bad note take down the whole plugin. renderPlayerInView is
+	// called from onload and from workspace events; an exception escaping during
+	// onload makes Obsidian report "Failed to load plugin" and the plugin then
+	// registers no commands or settings at all.
+	safeRenderPlayerInView = (markdownView: MarkdownView) => {
+		try {
+			this.renderPlayerInView(markdownView);
+		} catch (e) {
+			console.error("Media Notes: failed to render player", e);
+		}
+	};
+
+	// Reads frontmatter via the public metadataCache, falling back to parsing the
+	// view's raw frontmatter (an undocumented internal) only if the cache has no
+	// entry yet -- e.g. a file Obsidian has not finished indexing.
+	getViewFrontmatter = (
+		markdownView: MarkdownView
+	): Record<string, unknown> | undefined => {
+		const file = markdownView.file;
+		if (file) {
+			const cached = this.app.metadataCache.getFileCache(file)?.frontmatter;
+			if (cached) return cached as Record<string, unknown>;
+		}
+		try {
+			// @ts-ignore TS2339 - rawFrontmatter is not part of the public API
+			const raw = markdownView.rawFrontmatter;
+			if (typeof raw !== "string" || !raw.trim()) return undefined;
+			const parsed = parseYaml(raw);
+			if (!parsed || typeof parsed !== "object") return undefined;
+			return parsed as Record<string, unknown>;
+		} catch (e) {
+			console.warn("Media Notes: could not parse frontmatter", e);
+			return undefined;
+		}
+	};
+
 	renderPlayerInView = (markdownView: MarkdownView) => {
-		// @ts-ignore TS2339
-		const frontmatter = (parseYaml(markdownView.rawFrontmatter) ??
-			{}) as Record<string, string>;
-		// if there's a media_link
-		if (frontmatter && getMediaLinkFromFrontmatter(frontmatter)) {
+		const frontmatter = this.getViewFrontmatter(markdownView);
+		const frontmatterMediaLink = getMediaLinkFromFrontmatter(frontmatter);
+		// if there's a usable media_link
+		if (frontmatterMediaLink) {
 			const container = markdownView.containerEl;
 			const existingPlayerComponent = container.querySelector(
 				"." + mediaNotesContainerClass
@@ -147,11 +191,7 @@ export default class MediaNotesPlugin extends Plugin {
 					"";
 				const player = this.players[playerId];
 				// If a player state object exists for this media link, don't re-render
-				if (
-					player &&
-					player.mediaLink ===
-						getMediaLinkFromFrontmatter(frontmatter)
-				) {
+				if (player && player.mediaLink === frontmatterMediaLink) {
 					return;
 				}
 				// remove the existing player
@@ -183,7 +223,7 @@ export default class MediaNotesPlugin extends Plugin {
 			if (!markdownSourceview) return;
 			markdownSourceview.prepend(div);
 
-			const mediaLink = getMediaLinkFromFrontmatter(frontmatter);
+			const mediaLink = frontmatterMediaLink;
 			const ytRef = React.createRef<YouTube>();
 			const eventEmitter = new EventEmitter();
 			this.players[uniqueId] = {
@@ -197,7 +237,8 @@ export default class MediaNotesPlugin extends Plugin {
 				(mediaId && this.settings.mediaData[mediaId]) ||
 				this.settings.mediaData[mediaLink];
 
-			// extract the url param ts from the media link
+			// extract the url param ts from the media link. mediaLink is already
+			// validated by normalizeMediaLink, so this cannot throw.
 			const mediaLinkUrl = new URL(mediaLink);
 			const mediaLinkParams = new URLSearchParams(mediaLinkUrl.search);
 			const mediaLinkTs = mediaLinkParams.get("t");
@@ -263,9 +304,11 @@ export default class MediaNotesPlugin extends Plugin {
 
 		this.players = {};
 
-		this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
-			const view = leaf.view as MarkdownView;
-			this.renderPlayerInView(view);
+		// Since Obsidian 1.7.2 background leaves are "deferred": leaf.view is a
+		// DeferredView rather than a MarkdownView, so it must not be cast blindly.
+		// Waiting for layout-ready also avoids touching views mid-startup.
+		this.app.workspace.onLayoutReady(() => {
+			this.renderPlayersInAllViews();
 		});
 
 		// This adds a simple command that can be triggered anywhere
@@ -486,7 +529,7 @@ export default class MediaNotesPlugin extends Plugin {
 					});
 					return;
 				}
-				this.renderPlayerInView(markdownView);
+				this.safeRenderPlayerInView(markdownView);
 			})
 		);
 
@@ -494,12 +537,12 @@ export default class MediaNotesPlugin extends Plugin {
 			this.app.metadataCache.on("changed", (file) => {
 				const frontmatter =
 					this.app.metadataCache.getFileCache(file)?.frontmatter;
-				if (frontmatter && getMediaLinkFromFrontmatter(frontmatter)) {
+				if (getMediaLinkFromFrontmatter(frontmatter)) {
 					// technically this may not be the same view as the file that changed
 					const markdownView =
 						this.app.workspace.getActiveViewOfType(MarkdownView);
 					if (!markdownView) return;
-					this.renderPlayerInView(markdownView);
+					this.safeRenderPlayerInView(markdownView);
 				}
 			})
 		);
@@ -524,21 +567,33 @@ export default class MediaNotesPlugin extends Plugin {
 	}
 
 	onunload() {
-		// if there's an active view, save the timestamp (for development hot reloading)
-		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-		if (!activeView) return;
-		const container = activeView.containerEl;
-
-		// cleanup existing players, and save timestamp
-		const div = container.querySelector("." + mediaNotesContainerClass);
-		if (div) {
-			// unmount
-			const playerId = div.getAttribute("data-player-id") ?? "";
-			console.log("save timestamp before reloading!");
-			this.savePlayerTimestamp(playerId);
-			delete this.players[playerId];
-			div.remove();
-		}
+		// Save timestamps and tear down every player, not just the active view's --
+		// otherwise panes in the background keep orphaned player nodes and lose
+		// their playback position when the plugin is disabled or hot-reloaded.
+		this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
+			if (leaf.isDeferred) return;
+			const view = leaf.view;
+			if (!(view instanceof MarkdownView)) return;
+			view.containerEl
+				.querySelectorAll("." + mediaNotesContainerClass)
+				.forEach((div) => {
+					const playerId = div.getAttribute("data-player-id") ?? "";
+					try {
+						this.savePlayerTimestamp(playerId);
+					} catch (e) {
+						console.error(
+							"Media Notes: failed to save timestamp on unload",
+							e
+						);
+					}
+					delete this.players[playerId];
+					div.remove();
+				});
+			view.containerEl.classList.remove(
+				mediaParentContainerVerticalClass
+			);
+		});
+		this.players = {};
 	}
 
 	async loadSettings() {
