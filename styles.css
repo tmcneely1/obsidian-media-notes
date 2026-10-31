@@ -476,17 +476,20 @@ body.media-notes-resizing .media-notes-resize-handle {
 .media-notes-timestamp-button {
 	position: absolute;
 	top: 8px;
-	right: 8px;
+	/* Sits to the left of YouTube's own top-right controls (mute, captions,
+	   settings) so it does not cover them. Those are a fixed pixel size
+	   regardless of player width, so this offset is fixed too -- capped at half
+	   the player so it cannot be pushed onto the title in a narrow pane. */
+	right: min(var(--media-notes-button-right, 200px), 50%);
 	z-index: 2;
 
 	display: flex;
 	align-items: center;
-	gap: 5px;
-	padding: 4px 9px;
-	height: auto;
-	width: auto;
+	justify-content: center;
+	padding: 0;
+	height: 28px;
+	width: 28px;
 
-	font-size: 12px;
 	line-height: 1;
 	font-family: inherit;
 	color: var(--text-on-accent, #fff);
@@ -525,13 +528,6 @@ body.media-notes-resizing .media-notes-resize-handle {
 
 .media-notes-timestamp-button svg {
 	flex: none;
-}
-
-/* The label is the first thing to go when the player is narrow. */
-@media (max-width: 420px) {
-	.media-notes-timestamp-button span {
-		display: none;
-	}
 }
 
 /* Never let a drag over the divider interact with the button. */

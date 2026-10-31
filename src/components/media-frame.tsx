@@ -258,6 +258,8 @@ export const MediaFrame: React.FC<{
 							type="button"
 							className="media-notes-timestamp-button"
 							aria-label="Insert timestamp"
+							// icon-only, so give it a real tooltip
+							title="Insert timestamp"
 							// The button sits over a cross-origin iframe, which
 							// would otherwise take the click.
 							onPointerDown={(e) => e.stopPropagation()}
@@ -269,8 +271,8 @@ export const MediaFrame: React.FC<{
 						>
 							<svg
 								viewBox="0 0 24 24"
-								width="15"
-								height="15"
+								width="16"
+								height="16"
 								fill="none"
 								stroke="currentColor"
 								strokeWidth="2"
@@ -281,7 +283,6 @@ export const MediaFrame: React.FC<{
 								<circle cx="12" cy="12" r="9"></circle>
 								<polyline points="12 7 12 12 15.5 14"></polyline>
 							</svg>
-							<span>Timestamp</span>
 						</button>
 					)}
 			</div>
